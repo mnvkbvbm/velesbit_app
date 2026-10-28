@@ -23,7 +23,7 @@ class GithubReleaseInfo {
 
 class GithubUpdateService {
   // GitHub repository owner and name
-  static const String repoOwner = 'velesbit';
+  static const String repoOwner = 'mnvkbvbm';
   static const String repoName = 'velesbit_app';
 
   static Future<GithubReleaseInfo?> checkForUpdates() async {

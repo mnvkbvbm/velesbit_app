@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/services/app_state.dart';
 import '../../../core/services/crash_detection_service.dart';
 import '../widgets/track_canvas_widget.dart';
@@ -24,6 +25,7 @@ class _RideTrackerScreenState extends State<RideTrackerScreen> {
   bool _isGpsEnabled = true;
   bool _hasLocationPermission = true;
   bool _isNetworkConnected = true;
+  String _appVersion = '1.0.0';
   Timer? _statusCheckTimer;
 
   @override
@@ -33,12 +35,24 @@ class _RideTrackerScreenState extends State<RideTrackerScreen> {
     _selectedBike = bikes.isNotEmpty ? bikes.first : 'Gravel';
     _startCrashSensorListener();
     _checkServicesStatus();
+    _loadAppVersion();
 
     _statusCheckTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (!widget.appState.isTracking && mounted) {
         _checkServicesStatus();
       }
     });
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() {
+          _appVersion = info.version;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkServicesStatus() async {
@@ -496,7 +510,28 @@ class _RideTrackerScreenState extends State<RideTrackerScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sürüş Takibi'),
+        title: Row(
+          children: [
+            const Text('Sürüş Takibi'),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: theme.colorScheme.primary.withOpacity(0.3)),
+              ),
+              child: Text(
+                'v$_appVersion',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
       body: ListenableBuilder(
         listenable: appState,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/services/app_state.dart';
+import '../../../core/services/github_update_service.dart';
+import '../../guide/widgets/update_dialog.dart';
 import '../../ride/screens/ride_tracker_screen.dart';
 import '../../navigation/screens/navigation_screen.dart';
 import '../../ride/screens/ride_history_screen.dart';
@@ -17,6 +19,26 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAutoUpdateOnStartup();
+    });
+  }
+
+  Future<void> _checkAutoUpdateOnStartup() async {
+    try {
+      final releaseInfo = await GithubUpdateService.checkForUpdates();
+      if (mounted && releaseInfo != null && releaseInfo.hasUpdate) {
+        showDialog(
+          context: context,
+          builder: (context) => UpdateDialog(releaseInfo: releaseInfo),
+        );
+      }
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {

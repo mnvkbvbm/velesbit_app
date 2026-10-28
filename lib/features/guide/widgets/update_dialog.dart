@@ -81,9 +81,19 @@ class UpdateDialog extends StatelessWidget {
           child: const Text('Daha Sonra', style: TextStyle(color: Colors.grey)),
         ),
         ElevatedButton.icon(
-          onPressed: () {
+          onPressed: () async {
             Navigator.pop(context);
-            GithubUpdateService.launchDownload(releaseInfo.downloadUrl);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('📥 APK indirme bağlantısı açılıyor...'),
+                backgroundColor: Colors.teal,
+                duration: Duration(seconds: 3),
+              ),
+            );
+            final ok = await GithubUpdateService.launchDownload(releaseInfo.downloadUrl);
+            if (!ok) {
+              GithubUpdateService.launchDownload(releaseInfo.htmlUrl);
+            }
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: theme.colorScheme.primary,

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1015462484930",
+    "project_id": "velesbit-app-c75ce",
+    "storage_bucket": "velesbit-app-c75ce.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1015462484930:android:0f7c3e80f1bb63044b145b",
+        "android_client_info": {
+          "package_name": "com.example.velesbit"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyABciZ1Gw0ajQD741cHylIZOWdg6sXflYE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

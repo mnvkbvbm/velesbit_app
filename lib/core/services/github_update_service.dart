@@ -10,6 +10,7 @@ class GithubReleaseInfo {
   final String releaseNotes;
   final String downloadUrl;
   final String htmlUrl;
+  final bool forceUpdate;
 
   GithubReleaseInfo({
     required this.hasUpdate,
@@ -18,6 +19,7 @@ class GithubReleaseInfo {
     required this.releaseNotes,
     required this.downloadUrl,
     required this.htmlUrl,
+    this.forceUpdate = false,
   });
 }
 
@@ -26,11 +28,39 @@ class GithubUpdateService {
   static const String repoOwner = 'mnvkbvbm';
   static const String repoName = 'velesbit_app';
 
-  static Future<GithubReleaseInfo?> checkForUpdates() async {
-    try {
-      final packageInfo = await PackageInfo.fromPlatform();
-      final currentVersion = packageInfo.version;
+  // Raw GitHub version.json URL
+  static const String versionJsonUrl = 'https://raw.githubusercontent.com/$repoOwner/$repoName/main/version.json';
 
+  static Future<GithubReleaseInfo?> checkForUpdates() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    final currentVersion = packageInfo.version;
+
+    // 1. Try reading version.json from GitHub raw URL first
+    try {
+      final jsonResponse = await http.get(Uri.parse(versionJsonUrl));
+      if (jsonResponse.statusCode == 200) {
+        final data = json.decode(jsonResponse.body);
+        final String latestVersion = (data['version'] ?? '1.0.0').toString().replaceAll('v', '').trim();
+        final String releaseNotes = data['release_notes'] ?? 'Yeni performans iyileştirmeleri ve hata düzeltmeleri eklendi.';
+        final String downloadUrl = data['download_url'] ?? 'https://github.com/$repoOwner/$repoName/releases';
+        final bool forceUpdate = data['force_update'] ?? false;
+
+        final bool hasUpdate = _isVersionHigher(latestVersion, currentVersion);
+
+        return GithubReleaseInfo(
+          hasUpdate: hasUpdate,
+          currentVersion: currentVersion,
+          latestVersion: latestVersion,
+          releaseNotes: releaseNotes,
+          downloadUrl: downloadUrl,
+          htmlUrl: 'https://github.com/$repoOwner/$repoName/releases',
+          forceUpdate: forceUpdate,
+        );
+      }
+    } catch (_) {}
+
+    // 2. Fallback to GitHub Releases API if version.json is not reachable
+    try {
       final url = Uri.parse('https://api.github.com/repos/$repoOwner/$repoName/releases/latest');
       final response = await http.get(
         url,
@@ -47,7 +77,6 @@ class GithubUpdateService {
         final String releaseNotes = data['body'] ?? 'Yeni performans iyileştirmeleri ve hata düzeltmeleri eklendi.';
         final String htmlUrl = data['html_url'] ?? 'https://github.com/$repoOwner/$repoName/releases';
 
-        // Extract APK Asset URL if available
         String downloadUrl = htmlUrl;
         final assets = data['assets'] as List?;
         if (assets != null && assets.isNotEmpty) {
@@ -86,7 +115,6 @@ class GithubUpdateService {
     return false;
   }
 
-  // Helper method to compare semantic version strings (e.g. "1.1.0" vs "1.0.0")
   static bool _isVersionHigher(String latest, String current) {
     try {
       final latestParts = latest.split('.').map((e) => int.tryParse(e) ?? 0).toList();

@@ -43,9 +43,26 @@ class AppState extends ChangeNotifier {
   Future<void> _loadSavedCredentials() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _savedEmail = prefs.getString('remember_email') ?? 'ahmet@velesbit.com';
-      _savedPassword = prefs.getString('remember_password') ?? '123456';
+      _savedEmail = prefs.getString('remember_email') ?? '';
+      _savedPassword = prefs.getString('remember_password') ?? '';
       _rememberMe = prefs.getBool('remember_me') ?? true;
+
+      final savedFullName = prefs.getString('user_fullname');
+      final savedEmail = prefs.getString('user_email');
+      final savedPhone = prefs.getString('user_phone');
+      final savedBloodGroup = prefs.getString('user_bloodgroup');
+      final savedBikeTypes = prefs.getStringList('user_biketypes');
+
+      if (savedFullName != null && savedFullName.isNotEmpty) {
+        _currentUser = UserModel(
+          id: 'usr_1',
+          fullName: savedFullName,
+          email: savedEmail ?? 'ahmet@velesbit.com',
+          phone: savedPhone ?? '0555 123 45 67',
+          bloodGroup: savedBloodGroup ?? 'A Rh+',
+          bikeTypes: savedBikeTypes ?? ['Gravel', 'MTB (Dağ Bisikleti)', 'E-Bike'],
+        );
+      }
 
       final autoLogin = prefs.getBool('auto_login') ?? false;
       if (autoLogin && _savedEmail.isNotEmpty) {
@@ -53,6 +70,17 @@ class AppState extends ChangeNotifier {
         _isLoggedIn = true;
       }
       notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _saveProfileToPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_fullname', _currentUser.fullName);
+      await prefs.setString('user_email', _currentUser.email);
+      await prefs.setString('user_phone', _currentUser.phone);
+      await prefs.setString('user_bloodgroup', _currentUser.bloodGroup);
+      await prefs.setStringList('user_biketypes', _currentUser.bikeTypes);
     } catch (_) {}
   }
 
@@ -350,6 +378,7 @@ class AppState extends ChangeNotifier {
       bloodGroup: bloodGroup,
       bikeTypes: bikeTypes,
     );
+    _saveProfileToPrefs();
     notifyListeners();
   }
 

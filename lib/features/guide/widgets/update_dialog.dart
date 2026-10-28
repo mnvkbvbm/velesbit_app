@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/services/github_update_service.dart';
+import 'ota_download_dialog.dart';
 
 class UpdateDialog extends StatelessWidget {
   final GithubReleaseInfo releaseInfo;
@@ -81,19 +82,16 @@ class UpdateDialog extends StatelessWidget {
           child: const Text('Daha Sonra', style: TextStyle(color: Colors.grey)),
         ),
         ElevatedButton.icon(
-          onPressed: () async {
+          onPressed: () {
             Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('📥 APK indirme bağlantısı açılıyor...'),
-                backgroundColor: Colors.teal,
-                duration: Duration(seconds: 3),
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (dialogContext) => OtaDownloadDialog(
+                downloadUrl: releaseInfo.downloadUrl,
+                fallbackHtmlUrl: releaseInfo.htmlUrl,
               ),
             );
-            final ok = await GithubUpdateService.launchDownload(releaseInfo.downloadUrl);
-            if (!ok) {
-              GithubUpdateService.launchDownload(releaseInfo.htmlUrl);
-            }
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: theme.colorScheme.primary,

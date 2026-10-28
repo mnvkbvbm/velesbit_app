@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:ota_update/ota_update.dart';
+import 'package:http/http.dart' as http;
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../core/services/github_update_service.dart';
 
 class OtaDownloadDialog extends StatefulWidget {
@@ -22,65 +25,74 @@ class _OtaDownloadDialogState extends State<OtaDownloadDialog> {
   double _progressValue = 0.0;
   bool _isDownloading = true;
   bool _hasError = false;
-  StreamSubscription<OtaEvent>? _otaSubscription;
+  http.Client? _client;
 
   @override
   void initState() {
     super.initState();
-    _startOtaUpdate();
+    _startDownload();
   }
 
-  void _startOtaUpdate() {
+  Future<void> _startDownload() async {
     try {
-      _otaSubscription = OtaUpdate().execute(
-        widget.downloadUrl,
-        destinationFilename: 'velesbit_update.apk',
-      ).listen(
-        (OtaEvent event) {
-          if (!mounted) return;
+      _client = http.Client();
+      final request = http.Request('GET', Uri.parse(widget.downloadUrl));
+      final response = await _client!.send(request);
 
-          setState(() {
-            switch (event.status) {
-              case OtaStatus.DOWNLOADING:
-                _isDownloading = true;
-                _hasError = false;
-                final int progress = int.tryParse(event.value ?? '0') ?? 0;
-                _progressValue = progress / 100.0;
-                _statusText = '📥 APK İndiriliyor: %$progress';
-                break;
-              case OtaStatus.INSTALLING:
-                _isDownloading = false;
-                _hasError = false;
-                _statusText = '⚙️ Paket Yükleyici Başlatılıyor...\nLütfen açılan ekranda "Güncelle" veya "İzin Ver" seçeneğine basın.';
-                break;
-              case OtaStatus.ALREADY_RUNNING_ERROR:
-                _statusText = 'İndirme zaten arka planda devam ediyor.';
-                break;
-              case OtaStatus.PERMISSION_NOT_GRANTED_ERROR:
+      if (response.statusCode == 200 || response.statusCode == 302) {
+        final totalBytes = response.contentLength ?? 55000000;
+        int downloadedBytes = 0;
+
+        final dir = await getTemporaryDirectory();
+        final filePath = '${dir.path}/Velesbit_Update.apk';
+        final file = File(filePath);
+        final sink = file.openWrite();
+
+        response.stream.listen(
+          (chunk) {
+            if (!mounted) return;
+            downloadedBytes += chunk.length;
+            sink.add(chunk);
+
+            final progress = (downloadedBytes / totalBytes).clamp(0.0, 1.0);
+            setState(() {
+              _progressValue = progress;
+              _statusText = '📥 APK İndiriliyor: %${(progress * 100).toStringAsFixed(0)}';
+            });
+          },
+          onDone: () async {
+            await sink.close();
+            if (!mounted) return;
+
+            setState(() {
+              _isDownloading = false;
+              _progressValue = 1.0;
+              _statusText = '⚙️ Paket Yükleyici Başlatılıyor...\nLütfen açılan istemde "İzin Ver" ve "Güncelle" seçeneğine basın.';
+            });
+
+            // Open Android Native Package Installer via FileProvider!
+            final result = await OpenFilex.open(filePath);
+            if (result.type != ResultType.done) {
+              setState(() {
                 _hasError = true;
-                _isDownloading = false;
-                _statusText = '⚠️ Bilinmeyen Kaynaklardan Yükleme İzni Verilmedi.\nLütfen ayarlardan yüklemeye izin verin.';
-                break;
-              case OtaStatus.INTERNAL_ERROR:
-              case OtaStatus.DOWNLOAD_ERROR:
-              case OtaStatus.CHECKSUM_ERROR:
-              default:
-                _hasError = true;
-                _isDownloading = false;
-                _statusText = '⚠️ Doğrudan APK indirmede hata oluştu. Tarayıcı ile indirmeyi deneyebilirsiniz.';
-                break;
+                _statusText = '⚠️ Paket kurucu çalıştırılamadı: ${result.message}\nTarayıcı seçeneğini kullanabilirsiniz.';
+              });
             }
-          });
-        },
-        onError: (error) {
-          if (!mounted) return;
-          setState(() {
-            _hasError = true;
-            _isDownloading = false;
-            _statusText = '⚠️ Hata oluştu: Tarayıcıdan indirmeyi deneyin.';
-          });
-        },
-      );
+          },
+          onError: (error) async {
+            await sink.close();
+            if (!mounted) return;
+            setState(() {
+              _hasError = true;
+              _isDownloading = false;
+              _statusText = '⚠️ İndirme esnasında hata oluştu. Tarayıcı seçeneğini kullanın.';
+            });
+          },
+          cancelOnError: true,
+        );
+      } else {
+        throw Exception('HTTP Status ${response.statusCode}');
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -94,7 +106,7 @@ class _OtaDownloadDialogState extends State<OtaDownloadDialog> {
 
   @override
   void dispose() {
-    _otaSubscription?.cancel();
+    _client?.close();
     super.dispose();
   }
 

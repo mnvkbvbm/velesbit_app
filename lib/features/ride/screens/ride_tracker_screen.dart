@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import '../../../core/services/app_state.dart';
 import '../../../core/services/crash_detection_service.dart';
 import '../widgets/track_canvas_widget.dart';
@@ -18,12 +21,51 @@ class _RideTrackerScreenState extends State<RideTrackerScreen> {
   final CrashDetectionService _crashService = CrashDetectionService();
   late String _selectedBike;
 
+  bool _isGpsEnabled = true;
+  bool _hasLocationPermission = true;
+  bool _isNetworkConnected = true;
+  Timer? _statusCheckTimer;
+
   @override
   void initState() {
     super.initState();
     final bikes = widget.appState.currentUser.bikeTypes;
     _selectedBike = bikes.isNotEmpty ? bikes.first : 'Gravel';
     _startCrashSensorListener();
+    _checkServicesStatus();
+
+    _statusCheckTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (!widget.appState.isTracking && mounted) {
+        _checkServicesStatus();
+      }
+    });
+  }
+
+  Future<void> _checkServicesStatus() async {
+    try {
+      final gpsEnabled = await Geolocator.isLocationServiceEnabled();
+      final permission = await Geolocator.checkPermission();
+      final hasPermission = (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always);
+
+      bool networkConnected = false;
+      try {
+        final res = await http
+            .get(Uri.parse('https://connectivitycheck.gstatic.com/generate_204'))
+            .timeout(const Duration(seconds: 2));
+        networkConnected = res.statusCode == 204 || res.statusCode == 200;
+      } catch (_) {
+        networkConnected = false;
+      }
+
+      if (mounted) {
+        setState(() {
+          _isGpsEnabled = gpsEnabled;
+          _hasLocationPermission = hasPermission;
+          _isNetworkConnected = networkConnected;
+        });
+      }
+    } catch (_) {}
   }
 
   void _startCrashSensorListener() {
@@ -67,6 +109,7 @@ class _RideTrackerScreenState extends State<RideTrackerScreen> {
 
   @override
   void dispose() {
+    _statusCheckTimer?.cancel();
     _titleController.dispose();
     _crashService.stopListening();
     super.dispose();
@@ -320,6 +363,132 @@ class _RideTrackerScreenState extends State<RideTrackerScreen> {
     );
   }
 
+  Widget _buildTopStatusBanner() {
+    if (!_isGpsEnabled) {
+      return InkWell(
+        onTap: () async {
+          await Geolocator.openLocationSettings();
+          _checkServicesStatus();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.red.shade900,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.location_off_rounded, color: Colors.amberAccent, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '⚠️ GPS KAPALI - SÜRÜŞ İÇİN LÜTFEN KONUMU AÇIN (DOKUNUN)',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (!_hasLocationPermission) {
+      return InkWell(
+        onTap: () async {
+          await Geolocator.requestPermission();
+          _checkServicesStatus();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.amber.shade900,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.security_update_warning_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '⚠️ KONUM İZNİ EKSİK - LÜTFEN İZİN VERİN (DOKUNUN)',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (!_isNetworkConnected) {
+      return InkWell(
+        onTap: _checkServicesStatus,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.orange.shade800,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.wifi_off_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '⚠️ MOBİL AĞ KAPALI (SÜRÜŞ ÇEVRİMDIŞI KAYDEDİLİR)',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF00A896).withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF00A896), width: 1.5),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.check_circle_rounded, color: Color(0xFF00A896), size: 20),
+          SizedBox(width: 8),
+          Text(
+            'GPS VE AĞ BAĞLI - SÜRÜŞE BAŞLAMAYA HAZIR',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF00A896),
+              fontSize: 12.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -539,29 +708,7 @@ class _RideTrackerScreenState extends State<RideTrackerScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Top Tracker Status Indicator
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade400),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.play_circle_outline, color: Colors.grey.shade700),
-                      const SizedBox(width: 8),
-                      Text(
-                        'SÜRÜŞE BAŞLAMAYA HAZIR',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey.shade800,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                _buildTopStatusBanner(),
                 const SizedBox(height: 16),
 
                 // Interactive Map Preview
